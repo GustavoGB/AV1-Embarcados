@@ -11,6 +11,38 @@
 #include "calibri_36.h"
 #include "arial_72.h"
 
+//Definindo botao Oled
+#define EBUT1_PIO PIOD //start EXT 9 PD28
+#define EBUT1_PIO_ID 16
+#define EBUT1_PIO_IDX 28
+#define EBUT1_PIO_IDX_MASK (1u << EBUT1_PIO_IDX)
+
+// Flags para velocidade inst, tempo total, distancia total
+
+volatile Bool but_flag;
+volatile Bool but_start;
+int velocidade = 0;
+int distanciaTotal = 0;
+int tempoTrechoTotal = 0;
+
+
+void but_flag(void){
+	but_flag = true;
+}
+void but_start(void){
+	but_start = true;
+}
+
+void io_init(void){
+	
+	board_init();
+	sysclk_init();
+	
+	
+}
+
+
+
 
 struct ili9488_opt_t g_ili9488_display_opt;
 
