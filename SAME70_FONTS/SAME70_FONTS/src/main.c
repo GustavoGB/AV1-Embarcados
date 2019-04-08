@@ -31,10 +31,11 @@
 volatile Bool f_rtt_alarme = false;
 volatile Bool f_rtc_alarme = false;
 volatile Bool but_flag;
-volatile Bool but_start;
+volatile Bool but_start = false;
 char velocidade[32];
 char distanciaTotal[32];
-char tempoTrechoTotal[32];	
+char tempoTrechoTotal[32];
+char omega[32];	
 
 void pin_toggle(Pio *pio, uint32_t mask);
 
@@ -138,8 +139,12 @@ void RTT_Handler(void)
 
 	/* IRQ due to Alarm */
 	if ((ul_status & RTT_SR_ALMS) == RTT_SR_ALMS) {
+		if(but_start = true)
+		{
+		  f_rtt_alarme = true;
+		                   
+		}
 		//Transformar frequencia em velocidade para calcular tudo
-		f_rtt_alarme = true;                  // flag RTT alarme
 	}
 }
 //3 interrupcao
@@ -161,16 +166,16 @@ void RTC_Handler(void)
 	if ((ul_status & RTC_SR_ALARM) == RTC_SR_ALARM) {
 		rtc_clear_status(RTC, RTC_SCCR_ALRCLR);
 
-		if(flag_led0 == 1){
-			flag_led0 = 0;
+		if(but_start == true){
+			but_start = false;
 			rtc_get_time(RTC, &hour, &minute, &second);
 			rtc_set_time_alarm(RTC, 1, hour, 1, minute, 1, second+2);
 			tc_start(TC0, 1);
 
 			
 		}
-		else if(flag_led0 == 0){
-			flag_led0 = 1;
+		else if(but_start == false){
+			but_start = 1;
 			rtc_get_time(RTC, &hour, &minute, &second);
 			rtc_set_time_alarm(RTC, 1, hour, 1, minute, 1, second+2);
 			tc_stop(TC0, 1);
