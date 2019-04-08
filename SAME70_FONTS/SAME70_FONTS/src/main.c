@@ -38,8 +38,65 @@ void io_init(void){
 	board_init();
 	sysclk_init();
 	
-	
+	//Configura botao oled
+	pmc_enable_all_periph_clk(EBUT1_PIO_ID);
+	//Configura botoes do oled como input
+	pio_set_input(EBUT1_PIO,EBUT1_PIO_IDX_MASK,PIO_DEFAULT);
+	pio_pull_up(EBUT1_PIO,EBUT1_PIO_IDX_MASK,PIO_PULLUP);
+	//Configura a interrupcao
+	pio_handler_set(EBUT1_PIO,
+	EBUT1_PIO_ID,
+	EBUT1_PIO_IDX_MASK,
+	PIO_IT_FALL_EDGE,
+	but_start);
+	//Ativa a interrupcao
+	pio_enable_interrupt(EBUT1_PIO, EBUT1_PIO_IDX_MASK);
+	//Configura o NVIC para receber interrupcoes
+	NVIC_EnableIRQ(EBUT1_PIO_ID);
+	NVIC_SetPriority(EBUT1_PIO_ID, 0);
+	//delay_init()
+	WDT -> WDT_MR_WDDIS;
 }
+
+	void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL){
+	uint32_t ul_div;
+	uint32_t ul_tcclks;
+	uint32_t ul_sysclk = sysclk_get_cpu_hz();
+
+	uint32_t channel = 1;
+
+
+	/* Configura o PMC */
+	/* O TimerCounter ? meio confuso
+	o uC possui 3 TCs, cada TC possui 3 canais
+	TC0 : ID_TC0, ID_TC1, ID_TC2
+	TC1 : ID_TC3, ID_TC4, ID_TC5
+	TC2 : ID_TC6, ID_TC7, ID_TC8
+	*/
+	pmc_enable_periph_clk(ID_TC);
+
+	/** Configura o TC para operar em  4Mhz e interrup?c?o no RC compare */
+	tc_find_mck_divisor(freq, ul_sysclk, &ul_div, &ul_tcclks, ul_sysclk);
+	tc_init(TC, TC_CHANNEL, ul_tcclks | TC_CMR_CPCTRG);
+	tc_write_rc(TC, TC_CHANNEL, (ul_sysclk / ul_div) / freq);
+
+	/* Configura e ativa interrup?c?o no TC canal 0 */
+	/* Interrup??o no C */
+	NVIC_EnableIRQ((IRQn_Type) ID_TC);
+	tc_enable_interrupt(TC, TC_CHANNEL, TC_IER_CPCS);
+
+	/* Inicializa o canal 0 do TC */
+	tc_start(TC, TC_CHANNEL);
+}
+void pin_toggle(Pio *pio, uint32_t mask){
+	if(pio_get_output_data_status(pio, mask))
+	pio_clear(pio, mask);
+	else
+	pio_set(pio,mask);
+}
+volatile uint8_t flag_start = 1;
+
+
 
 
 
