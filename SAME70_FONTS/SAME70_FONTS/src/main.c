@@ -10,6 +10,7 @@
 #include "sourcecodepro_28.h"
 #include "calibri_36.h"
 #include "arial_72.h"
+#include "math.h"
 
 //Definindo horario
 #define YEAR        2019
@@ -20,30 +21,39 @@
 #define MINUTE      45
 #define SECOND      0
 
+#define PI 3.14
+
 //Definindo botao Oled
 #define EBUT1_PIO PIOD //start EXT 9 PD28
 #define EBUT1_PIO_ID 16
 #define EBUT1_PIO_IDX 28
 #define EBUT1_PIO_IDX_MASK (1u << EBUT1_PIO_IDX)
 
+#define BUT_PIO      PIOA
+#define BUT_PIO_ID   ID_PIOA
+#define BUT_IDX  11
+#define BUT_IDX_MASK (1 << BUT_IDX)
+
 // Flags para velocidade inst, tempo total, distancia total variaveis globais
 
 volatile Bool f_rtt_alarme = false;
-volatile Bool f_rtc_alarme = false;
 volatile Bool but_flag;
 volatile Bool but_start = false;
-char velocidade[32];
-char distanciaTotal[32];
-char tempoTrechoTotal[32];
-char omega[32];	
+volatile int pulsos;
+volatile int dT;
+volatile int omega;
+volatile int velocidade;
+volatile int distanciaTotal;
+	
 
 void pin_toggle(Pio *pio, uint32_t mask);
+void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq);
 
 
-void but_flag(void){
+void but_flag_callback(void){
 	but_flag = true;
 }
-void but_start(void){
+void but_start_callback(void){
 	but_start = true;
 }
 
@@ -53,23 +63,23 @@ void io_init(void){
 	sysclk_init();
 	
 	//Configura botao oled
-	pmc_enable_all_periph_clk(EBUT1_PIO_ID);
+	pmc_enable_periph_clk(BUT_PIO_ID);
 	//Configura botoes do oled como input
-	pio_set_input(EBUT1_PIO,EBUT1_PIO_IDX_MASK,PIO_DEFAULT);
-	pio_pull_up(EBUT1_PIO,EBUT1_PIO_IDX_MASK,PIO_PULLUP);
+	pio_set_input(BUT_PIO,BUT_IDX_MASK,PIO_DEFAULT);
+	pio_pull_up(BUT_PIO,BUT_IDX_MASK,PIO_PULLUP);
 	//Configura a interrupcao
 	pio_handler_set(EBUT1_PIO,
-	EBUT1_PIO_ID,
-	EBUT1_PIO_IDX_MASK,
+	BUT_PIO_ID,
+	BUT_IDX,
 	PIO_IT_FALL_EDGE,
 	but_start);
 	//Ativa a interrupcao
 	pio_enable_interrupt(EBUT1_PIO, EBUT1_PIO_IDX_MASK);
 	//Configura o NVIC para receber interrupcoes
-	NVIC_EnableIRQ(EBUT1_PIO_ID);
-	NVIC_SetPriority(EBUT1_PIO_ID, 0);
+	NVIC_EnableIRQ(BUT_PIO_ID);
+	NVIC_SetPriority(BUT_PIO_ID, 0);
 	//delay_init()
-	WDT -> WDT_MR_WDDIS;
+	//WDT -> WDT_MR_WDDIS;
 }
 
 	void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq){
@@ -79,13 +89,6 @@ void io_init(void){
 
 	uint32_t channel = 1;
 
-	/* Configura o PMC */
-	/* O TimerCounter ? meio confuso
-	o uC possui 3 TCs, cada TC possui 3 canais
-	TC0 : ID_TC0, ID_TC1, ID_TC2
-	TC1 : ID_TC3, ID_TC4, ID_TC5
-	TC2 : ID_TC6, ID_TC7, ID_TC8
-	*/
 	pmc_enable_periph_clk(ID_TC);
 
 	/** Configura o TC para operar em  4hz e interrup?c?o no RC compare */
@@ -121,11 +124,8 @@ void TC1_Handler(void){
 	/* Avoid compiler warning */
 	UNUSED(ul_dummy);
 
-	/** converte as frequencias em omega(velocidade angular) */
 	
 }
-void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq);
-//Interrupcao 2 
 
 void RTT_Handler(void)
 {
@@ -138,60 +138,14 @@ void RTT_Handler(void)
 	if ((ul_status & RTT_SR_RTTINC) == RTT_SR_RTTINC) {  }
 
 	/* IRQ due to Alarm */
+	if(but_start == 1){
 	if ((ul_status & RTT_SR_ALMS) == RTT_SR_ALMS) {
-		if(but_start = true)
-		{
-		  f_rtt_alarme = true;
-		                   
-		}
-		//Transformar frequencia em velocidade para calcular tudo
+		 //tc_start(Tc * TC, int ID_TC, int TC_CHANNEL, int freq);
+		 f_rtt_alarme = true;
+		 pulsos += 1;
+	}
 	}
 }
-//3 interrupcao
-void RTC_Handler(void)
-{
-	uint32_t ul_status = rtc_get_status(RTC);
-
-	uint32_t hour, minute, second;
-	/*
-	*  Verifica por qual motivo entrou
-	*  na interrupcao, se foi por segundo
-	*  ou Alarm
-	*/
-	if ((ul_status & RTC_SR_SEC) == RTC_SR_SEC) {
-		rtc_clear_status(RTC, RTC_SCCR_SECCLR);
-	}
-	
-	/* Time or date alarm */
-	if ((ul_status & RTC_SR_ALARM) == RTC_SR_ALARM) {
-		rtc_clear_status(RTC, RTC_SCCR_ALRCLR);
-
-		if(but_start == true){
-			but_start = false;
-			rtc_get_time(RTC, &hour, &minute, &second);
-			rtc_set_time_alarm(RTC, 1, hour, 1, minute, 1, second+2);
-			tc_start(TC0, 1);
-
-			
-		}
-		else if(but_start == false){
-			but_start = 1;
-			rtc_get_time(RTC, &hour, &minute, &second);
-			rtc_set_time_alarm(RTC, 1, hour, 1, minute, 1, second+2);
-			tc_stop(TC0, 1);
-		}			
-	}
-	
-	rtc_clear_status(RTC, RTC_SCCR_ACKCLR);
-	rtc_clear_status(RTC, RTC_SCCR_TIMCLR);
-	rtc_clear_status(RTC, RTC_SCCR_CALCLR);
-	rtc_clear_status(RTC, RTC_SCCR_TDERRCLR);
-	
-}
-void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq);
-
-
-
 
 struct ili9488_opt_t g_ili9488_display_opt;
 
@@ -229,13 +183,6 @@ int main(void) {
 	sysclk_init();	
 	configure_lcd();
 	
-	
-	
-	
-	
-	font_draw_text(&sourcecodepro_28, "OIMUNDO", 50, 50, 1);
-	font_draw_text(&calibri_36, "Oi Mundo! #$!@", 50, 100, 1);
-	font_draw_text(&arial_72, "102456", 50, 200, 2);
 	while(1) {
 		if (f_rtt_alarme){
       
@@ -260,27 +207,38 @@ int main(void) {
        */
       uint16_t pllPreScale = (int) (((float) 32768) / 2.0);
       uint32_t irqRTTvalue  = 4;
-      
+	  // Quando o botao for apertado
+	  
+	  char velocidadeBuffer[32];
+	  char distanciaTotalBuffer[32];
+	  char tempoTrechoTotalBuffer[32];
+	  char omegaBuffer[32];
+ 
+		  
+		  int (omega)          = 2 * PI * pulsos/dT;  
+		  int (velocidade)     = omega * 0.650;
+		  int (distanciaTotal) = 2 * PI * 0.650 * pulsos;
+		  
+		  sprintf(omegaBuffer,"%d",omega);
+		  sprintf(velocidadeBuffer,"%d",velocidade);
+		  sprintf(distanciaTotalBuffer,"%d",distanciaTotal);
+		  
+		  font_draw_text(&omega,omega, 50, 100, 1);
+		  font_draw_text(&velocidade, velocidade, 50, 100, 1);
+		  font_draw_text(&distanciaTotal,distanciaTotal, 50, 100, 2); 			  
+		  
+
       // reinicia RTT para gerar um novo IRQ
-      RTT_init(pllPreScale, irqRTTvalue);       
-	  // Cria um alarme 
-	  rtc_set_date_alarm(RTC, 1, MOUNTH, 1, DAY);
-	  rtc_set_time_alarm(RTC, 1, HOUR, 1, MINUTE, 1, SECOND+2);  
+      //RTT_init(pllPreScale, irqRTTvalue);       
       
      /*
       * caso queira ler o valor atual do RTT, basta usar a funcao
       *   rtt_read_timer_value()
       */
-      
       /*
        * CLEAR FLAG
        */
       f_rtt_alarme = false;
-	  
-	  if(f_rtc_alarme);
-	  
-      
-		
 		}
-}	
-	}
+	}	
+}
